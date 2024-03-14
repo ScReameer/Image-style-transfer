@@ -1,47 +1,46 @@
 import keras
 import tensorflow as tf
 
-class ReflectionPadding2D(keras.Layer):
+class ReflectionPadding2D(keras.layers.Layer):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
-    def call(self, x) -> tf.Tensor:
-        return tf.pad(x, tf.constant([[0,0], [1,1], [1,1], [0,0]]), mode="REFLECT")
+    def call(self, inputs:tf.Tensor) -> tf.Tensor:
+        return tf.pad(inputs, tf.constant([[0,0], [1,1], [1,1], [0,0]]), mode="REFLECT")
 
-def compute_mean_std(x:tf.Tensor, epsilon=1e-5) -> tuple:
+def compute_mean_std(inputs:tf.Tensor, epsilon=1e-5) -> tuple:
     axes = [1, 2]
-    mean, variance = tf.nn.moments(x, axes=axes, keepdims=True)
+    mean, variance = tf.nn.moments(inputs, axes=axes, keepdims=True)
     standard_deviation = tf.sqrt(variance + epsilon)
     return mean, standard_deviation
 
-class AdaIN(keras.Layer):
+class AdaIN(keras.layers.Layer):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.trainable = False
         self.build((None, None, 512))
-
-    def call(self, content:tf.Tensor, style=tf.Tensor, alpha=1) -> tf.Tensor:
+        
+    def call(self, inputs:tf.Tensor) -> tf.Tensor:
+        content, style = inputs[0], inputs[1]
         content_mean, content_std = compute_mean_std(content)
         style_mean, style_std = compute_mean_std(style)
         t = style_std * ((content - content_mean) / content_std) + style_mean
-        # Interpolate between content and style using alpha:
-        # less alpha -> less style
-        return alpha * t + ((1 - alpha) * content)
+        return t
 
-class Encoder(keras.Model):
+class Encoder(keras.layers.Layer):
     def __init__(self, input_shape=(None, None, 3)) -> None:
         super().__init__()
-        self.input_shape = input_shape
+        self.trainable = False
         vgg19 = keras.applications.VGG19(
             include_top=False, 
             weights='imagenet', 
-            input_shape=self.input_shape
+            input_shape=input_shape
         )
         vgg19.trainable = False
         self.layer_names = ['block1_conv1', 'block2_conv1', 'block3_conv1', 'block4_conv1']
         outputs = [vgg19.get_layer(name).output for name in self.layer_names]
         mini_vgg19 = keras.Model(vgg19.input, outputs)
-        self.encoder = keras.Sequential()
+        self.encoder = keras.Sequential(name='encoder')
         for layer in mini_vgg19.layers:
             if isinstance(layer, keras.layers.Conv2D):
                 # Weights of vgg19 conv layer
@@ -58,51 +57,45 @@ class Encoder(keras.Model):
                         dilation_rate=layer.dilation_rate,
                         activation=layer.activation,
                         kernel_initializer=W_init,
-                        bias_initializer=B_init
+                        bias_initializer=B_init,
+                        name=layer.name
                     )
                 )
-                self.encoder.layers[-1].name = layer.name
             else:
                 self.encoder.add(layer)
         self.encoder.trainable = False
-        self.build(self.input_shape)
+        self.block1 = keras.Model(
+            inputs=self.encoder.inputs,
+            outputs=self.encoder.get_layer(self.layer_names[0]).output
+        )
+        self.block2 = keras.Model(
+            inputs=self.encoder.inputs,
+            outputs=self.encoder.get_layer(self.layer_names[1]).output
+        )
+        self.block3 = keras.Model(
+            inputs=self.encoder.inputs,
+            outputs=self.encoder.get_layer(self.layer_names[2]).output
+        )
+        self.block4 = keras.Model(
+            inputs=self.encoder.inputs,
+            outputs=self.encoder.get_layer(self.layer_names[3]).output
+        )
+        self.build(input_shape)
 
-    def call(self, inputs, return_only_last=False) -> tf.Tensor:
-        # relu4_1
-        block4 = keras.Model(
-            inputs=self.encoder.inputs,
-            outputs=self.layers[0].get_layer(self.layer_names[3]).output
-        )
-        # Last featuremap of encoder
-        out4 = block4(inputs)
-        # Inference speed optimization
-        if return_only_last:
-            return out4
-        # relu1_1
-        block1 = keras.Model(
-            inputs=self.encoder.inputs,
-            outputs=self.layers[0].get_layer(self.layer_names[0]).output
-        )
-        # relu2_1
-        block2 = keras.Model(
-            inputs=self.encoder.inputs,
-            outputs=self.layers[0].get_layer(self.layer_names[1]).output
-        )
-        # relu3_1
-        block3 = keras.Model(
-            inputs=self.encoder.inputs,
-            outputs=self.layers[0].get_layer(self.layer_names[2]).output
-        )
-        # Intermediate featuremaps
-        out1 = block1(inputs)
-        out2 = block2(inputs)
-        out3 = block3(inputs)
+    def call(self, inputs:tf.Tensor) -> tf.Tensor:
+        out1 = self.block1(inputs)
+        out2 = self.block2(inputs)
+        out3 = self.block3(inputs)
+        out4 = self.block4(inputs)
         return out1, out2, out3, out4
     
-class Decoder(keras.Model):
+    def inference(self, inputs:tf.Tensor):
+        out4 = self.block4(inputs)
+        return out4
+    
+class Decoder(keras.layers.Layer):
     def __init__(self, input_shape=(None, None, 512)) -> None:
         super().__init__()
-        self.input_shape = input_shape
         self.conv_config = dict(
             kernel_size=(3, 3),
             activation='relu',
@@ -110,7 +103,7 @@ class Decoder(keras.Model):
         )
         # Mirrored encoder
         self.decoder = keras.Sequential([
-            keras.layers.InputLayer(self.input_shape),
+            keras.layers.InputLayer(input_shape),
             ReflectionPadding2D(),
             keras.layers.Conv2D(256, **self.conv_config),
             keras.layers.UpSampling2D(),
@@ -133,8 +126,8 @@ class Decoder(keras.Model):
             ReflectionPadding2D(),
             keras.layers.Conv2D(3, kernel_size=(3, 3), padding='valid')
         ], name='decoder')
-        self.build(self.input_shape)
+        self.build(input_shape)
 
-    def call(self, inputs) -> tf.Tensor:
+    def call(self, inputs:tf.Tensor) -> tf.Tensor:
         return self.decoder(inputs)
     
