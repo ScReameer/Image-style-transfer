@@ -122,8 +122,8 @@ class StyleTransfer(keras.Model):
                 content, style = np.asarray(content), np.asarray(style)
             style = match_histograms(style, content, channel_axis=-1)
         # Inference func returns only one output from 'block4_conv1' / 'relu4_1'
-        content_encoded = self.encoder.inference(content)
-        style_encoded = self.encoder.inference(style)
+        content_encoded = self.encoder(content, inference=True)
+        style_encoded = self.encoder(style, inference=True)
         # AdaIN feature map
         t = self.adain((content_encoded, style_encoded))
         # Interpolate between content and style using alpha

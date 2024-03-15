@@ -24,6 +24,7 @@ class AdaIN(keras.layers.Layer):
         content, style = inputs[0], inputs[1]
         content_mean, content_std = compute_mean_std(content)
         style_mean, style_std = compute_mean_std(style)
+        # Compute AdaIN feature map
         t = style_std * ((content - content_mean) / content_std) + style_mean
         return t
 
@@ -31,15 +32,18 @@ class Encoder(keras.layers.Layer):
     def __init__(self, input_shape=(None, None, 3)) -> None:
         super().__init__()
         self.trainable = False
+        # Pretrained vgg19 without head
         vgg19 = keras.applications.VGG19(
             include_top=False, 
             weights='imagenet', 
             input_shape=input_shape
         )
         vgg19.trainable = False
+        # Build part of vgg19 as feature extractor
         self.layer_names = ['block1_conv1', 'block2_conv1', 'block3_conv1', 'block4_conv1']
         outputs = [vgg19.get_layer(name).output for name in self.layer_names]
         mini_vgg19 = keras.Model(vgg19.input, outputs)
+        # Rebuild part of vgg19 into encoder with ReflectionPadding2D layer before convolution
         self.encoder = keras.Sequential(name='encoder')
         for layer in mini_vgg19.layers:
             if isinstance(layer, keras.layers.Conv2D):
@@ -64,44 +68,47 @@ class Encoder(keras.layers.Layer):
             else:
                 self.encoder.add(layer)
         self.encoder.trainable = False
+        # block1_conv1 / relu1_1
         self.block1 = keras.Model(
             inputs=self.encoder.inputs,
             outputs=self.encoder.get_layer(self.layer_names[0]).output
         )
+        # block2_conv1 / relu2_1
         self.block2 = keras.Model(
             inputs=self.encoder.inputs,
             outputs=self.encoder.get_layer(self.layer_names[1]).output
         )
+        # block3_conv1 / relu3_1
         self.block3 = keras.Model(
             inputs=self.encoder.inputs,
             outputs=self.encoder.get_layer(self.layer_names[2]).output
         )
+        # block4_conv1 / relu4_1
         self.block4 = keras.Model(
             inputs=self.encoder.inputs,
             outputs=self.encoder.get_layer(self.layer_names[3]).output
         )
         self.build(input_shape)
 
-    def call(self, inputs:tf.Tensor) -> tf.Tensor:
+    def call(self, inputs:tf.Tensor, inference=False) -> tf.Tensor:
+        out4 = self.block4(inputs)
+        if inference:
+            return out4
         out1 = self.block1(inputs)
         out2 = self.block2(inputs)
         out3 = self.block3(inputs)
-        out4 = self.block4(inputs)
         return out1, out2, out3, out4
-    
-    def inference(self, inputs:tf.Tensor):
-        out4 = self.block4(inputs)
-        return out4
     
 class Decoder(keras.layers.Layer):
     def __init__(self, input_shape=(None, None, 512)) -> None:
         super().__init__()
+        # Same config as encoder
         self.conv_config = dict(
             kernel_size=(3, 3),
             activation='relu',
             padding='valid'
         )
-        # Mirrored encoder
+        # Mirrored encoder to generate image from feature map
         self.decoder = keras.Sequential([
             keras.layers.InputLayer(input_shape),
             ReflectionPadding2D(),
