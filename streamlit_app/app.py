@@ -5,14 +5,24 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import streamlit as st
 import tensorflow as tf
 import keras
+import wget
 
 st.title('Style transfer using AdaIN')
 
 @st.cache_resource
 def get_model():
-    model = keras.models.load_model('checkpoint/style_model_5.keras', compile=False)
+    folder_name='model/'
+    model_filename = folder_name + 'model.keras'
+    # Download model if not already downloaded
+    if not os.path.exists(folder_name): 
+        os.mkdir(folder_name)
+        url_model = r'https://drive.usercontent.google.com/download?id=1N0t6uhtO4W9tlLvTGLqm_y5beZQmu7sk&export=download&confirm=yes'
+        wget.download(url_model, out=model_filename)
+    # Load and return pretrained model
+    model = keras.models.load_model(model_filename, compile=False)
     model.trainable = False
     return model
+
 
 def get_prediction(model, content, style, alpha, save_content_colors):
     content_img = tf.expand_dims(tf.image.decode_image(content.getvalue()), 0)
