@@ -8,7 +8,7 @@ import tensorflow as tf
 import keras
 import wget
 
-st.title('Style transfer using AdaIN')
+st.markdown('# <center>Style transfer using AdaIN', unsafe_allow_html=True)
 
 @st.cache_resource
 def get_model():
@@ -24,30 +24,32 @@ def get_model():
     model.trainable = False
     return model
 
-
 def get_prediction(model, content, style, alpha, save_content_colors):
-    content_img = tf.expand_dims(tf.image.decode_image(content.getvalue()), 0)
-    style_img = tf.expand_dims(tf.image.decode_image(style.getvalue()), 0)
+    content_img = tf.image.decode_image(content.getvalue(), channels=3)[tf.newaxis, ...]
+    style_img = tf.image.decode_image(style.getvalue(), channels=3)[tf.newaxis, ...]
     outputs = model.predict(content_img, style_img, alpha, save_content_colors)[0]
     return outputs.numpy() / 255
 
 model = get_model()
-content = st.file_uploader('content_file', key='content_file', type=['png', 'jpg', 'jpeg'])
-style = st.file_uploader('style_file', key='style_file', type=['png', 'jpg', 'jpeg'])
+content_upload_col, style_upload_col = st.columns(2, gap='large')
+with content_upload_col:
+    # st.markdown('<b>Изображение контента', unsafe_allow_html=True)
+    content = st.file_uploader('**Изображение контента**', key='content_file', type=['png', 'jpg', 'jpeg'])
+with style_upload_col:
+    # st.markdown('<b>Изображение стиля', unsafe_allow_html=True)
+    style = st.file_uploader('**Изображение стиля**', key='style_file', type=['png', 'jpg', 'jpeg'])
 alpha = st.slider('Alpha', 0.0, 1.0, 1.0)
 save_content_colors = st.checkbox('Save content colors')
 
 if content and style:
-    content_column, output_column, style_column = st.columns(3)
     output = get_prediction(model, content, style, alpha, save_content_colors)
-    with content_column:
-        st.markdown('### Content')
+    st.markdown('### <center>Generated', unsafe_allow_html=True)
+    st.image(output)
+    content_col, style_col = st.columns(2, gap='large')
+    with content_col:
+        st.markdown('### <center>Content', unsafe_allow_html=True)
         st.image(content)
-        
-    with output_column:
-        st.markdown('### Generated')
-        st.image(output)
-        
-    with style_column:
-        st.markdown('### Style')
+ 
+    with style_col:
+        st.markdown('### <center>Style', unsafe_allow_html=True)
         st.image(style)

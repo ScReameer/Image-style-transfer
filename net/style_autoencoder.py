@@ -42,17 +42,17 @@ class StyleTransfer(keras.Model):
         loss_fn = keras.utils.deserialize_keras_object(config["loss_fn"])
         self.compile(optimizer=optimizer, loss_fn=loss_fn)
 
-    def preprocess_input(self, content_img:tf.Tensor, style_img:tf.Tensor, resize=None) -> tuple:
+    def preprocess_input(self, img:tf.Tensor, resize=None) -> tuple:
         # Decentered RGB (uint8) -> centered BGR (float32)
-        content_img = tf.reverse(content_img, axis=[-1])
-        style_img = tf.reverse(style_img, axis=[-1])
-        content_img = tf.cast(content_img, tf.float32) - self.imgnet_mean_bgr
-        style_img = tf.cast(style_img, tf.float32) - self.imgnet_mean_bgr
+        img = tf.reverse(img, axis=[-1])
+        # style_img = tf.reverse(style_img, axis=[-1])
+        img = tf.cast(img, tf.float32) - self.imgnet_mean_bgr
+        # img = tf.cast(img, tf.float32) - self.imgnet_mean_bgr
         # Resize for inference
         if resize:
-            content_img = self.resizer(*resize)(content_img)
-            style_img = self.resizer(*resize)(style_img)
-        return content_img, style_img
+            img = self.resizer(*resize)(img)
+            # style_img = self.resizer(*resize)(style_img)
+        return img
 
     def postprocess_output(self, reconstructed_image:tf.Tensor, output_shape:tuple) -> tf.Tensor:
         # Centered BGR (float32) -> decentered BGR (uint8)
@@ -102,7 +102,8 @@ class StyleTransfer(keras.Model):
     def call(self, inputs:tf.Tensor) -> tf.Tensor:
         content, style = inputs[0], inputs[1]
         # RGB -> BGR -> center by mean
-        content, style = self.preprocess_input(content, style)
+        content = self.preprocess_input(content)
+        style = self.preprocess_input(style)
         content_encoded = self.encoder(content)
         style_encoded = self.encoder(style)
         # Compute the AdaIN target feature maps. [-1] is 'block4_conv1' ('relu4_1' in original paper)
@@ -112,8 +113,13 @@ class StyleTransfer(keras.Model):
         return style_encoded, content_encoded, t, reconstructed_image
     # Inference
     def predict(self, content:tf.Tensor, style:tf.Tensor, alpha=1, save_content_colors=False) -> tf.Tensor:
-        output_shape = content.shape[1:3]
-        content, style = self.preprocess_input(content, style, resize=(512, 512))
+        content_shape = content.shape[1:3]
+        style_shape = style.shape[1:3]
+        # Max between min dimensions of content and style,
+        # i.e. content=(1920, 1080), style=(1280, 720) -> resize = max(1080, 720) = (1080, 1080)
+        resize = (max((min(content_shape), min(style_shape))),)*2
+        content = self.preprocess_input(content, resize=resize)
+        style = self.preprocess_input(style, resize=resize)
         if save_content_colors:
             # match_histograms method takes only numpy arrays, not tensors
             if isinstance(content, tf.Tensor) and isinstance(style, tf.Tensor):
@@ -129,7 +135,7 @@ class StyleTransfer(keras.Model):
         # Interpolate between content and style using alpha
         interpolated_features = (1 - alpha)*content_encoded + alpha*t
         reconstructed_image = self.decoder(interpolated_features)
-        output = self.postprocess_output(reconstructed_image, output_shape=output_shape)
+        output = self.postprocess_output(reconstructed_image, output_shape=content_shape)
         return output
     
     @property
