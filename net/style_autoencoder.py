@@ -45,28 +45,24 @@ class StyleTransfer(keras.Model):
     def preprocess_input(self, img:tf.Tensor, resize=None) -> tuple:
         # Decentered RGB (uint8) -> centered BGR (float32)
         img = tf.reverse(img, axis=[-1])
-        # style_img = tf.reverse(style_img, axis=[-1])
         img = tf.cast(img, tf.float32) - self.imgnet_mean_bgr
-        # img = tf.cast(img, tf.float32) - self.imgnet_mean_bgr
         # Resize for inference
         if resize:
             img = self.resizer(*resize)(img)
-            # style_img = self.resizer(*resize)(style_img)
         return img
 
     def postprocess_output(self, reconstructed_image:tf.Tensor, output_shape:tuple) -> tf.Tensor:
-        # Centered BGR (float32) -> decentered BGR (uint8)
-        denormalized_img = tf.cast(tf.clip_by_value((reconstructed_image + self.imgnet_mean_bgr), 0, 255), tf.uint8)
+        # Centered (float32) -> decenter -> clip to [0, 255] -> uint8
+        decentered_img = tf.cast(tf.clip_by_value((reconstructed_image + self.imgnet_mean_bgr), 0, 255), tf.uint8)
         # Resize to original shape of content image
-        resized_img = self.resizer(*output_shape)(denormalized_img)
+        resized_img = self.resizer(*output_shape)(decentered_img)
         # BGR -> RGB
         return tf.reverse(resized_img, axis=[-1])
 
     def train_step(self, inputs:tf.Tensor) -> dict:
-        # content, style = self.preprocess_input(*inputs)
         loss_content = 0.0
         loss_style = 0.0
-        # Compute losses and grad
+        # Compute losses
         with tf.GradientTape() as tape:
             style_encoded, content_encoded, t, reconstructed_image = self(inputs)
             reconstructed_img_features = self.encoder(reconstructed_image)
@@ -115,9 +111,13 @@ class StyleTransfer(keras.Model):
     def predict(self, content:tf.Tensor, style:tf.Tensor, alpha=1, save_content_colors=False) -> tf.Tensor:
         content_shape = content.shape[1:3]
         style_shape = style.shape[1:3]
+        if min(content_shape) > 1079:
+            output_shape = list(map(lambda x: int(x / 1.5), content_shape))
+        else:
+            output_shape = content_shape
         # Max between min dimensions of content and style,
-        # i.e. content=(1920, 1080), style=(1280, 720) -> resize = max(1080, 720) = (1080, 1080)
-        resize = (max((min(content_shape), min(style_shape))),)*2
+        # i.e. content=(1920, 1080), style=(1280, 720) -> max(1080, 720) -> (1080, 1080)
+        resize = (max(min(content_shape), min(style_shape)),)*2
         content = self.preprocess_input(content, resize=resize)
         style = self.preprocess_input(style, resize=resize)
         if save_content_colors:
@@ -135,7 +135,7 @@ class StyleTransfer(keras.Model):
         # Interpolate between content and style using alpha
         interpolated_features = (1 - alpha)*content_encoded + alpha*t
         reconstructed_image = self.decoder(interpolated_features)
-        output = self.postprocess_output(reconstructed_image, output_shape=content_shape)
+        output = self.postprocess_output(reconstructed_image, output_shape=output_shape)
         return output
     
     @property
