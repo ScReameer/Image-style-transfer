@@ -32,17 +32,17 @@ def get_prediction(model, content, style, alpha, save_content_colors):
 
 model = get_model()
 content_upload_col, style_upload_col = st.columns(2, gap='large')
+allowed_types = ['png', 'jpg', 'jpeg']
 with content_upload_col:
-    # st.markdown('<b>Изображение контента', unsafe_allow_html=True)
-    content = st.file_uploader('**Изображение контента**', key='content_file', type=['png', 'jpg', 'jpeg'])
+    content = st.file_uploader('**Изображение контента**', key='content_file', type=allowed_types)
 with style_upload_col:
-    # st.markdown('<b>Изображение стиля', unsafe_allow_html=True)
-    style = st.file_uploader('**Изображение стиля**', key='style_file', type=['png', 'jpg', 'jpeg'])
+    style = st.file_uploader('**Изображение стиля**', key='style_file', type=allowed_types)
 alpha = st.slider('Alpha', 0.0, 1.0, 1.0)
 save_content_colors = st.checkbox('Save content colors')
 
 if content and style:
-    output = get_prediction(model, content, style, alpha, save_content_colors)
+    with st.spinner():
+        output = get_prediction(model, content, style, alpha, save_content_colors)
     st.markdown('### <center>Generated', unsafe_allow_html=True)
     st.image(output)
     content_col, style_col = st.columns(2, gap='large')

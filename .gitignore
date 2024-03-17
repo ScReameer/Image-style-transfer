@@ -1,3 +1,5 @@
 checkpoint
 __*
 model
+mobile_app
+*.tflite
