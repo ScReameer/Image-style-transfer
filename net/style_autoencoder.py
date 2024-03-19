@@ -115,9 +115,6 @@ class StyleTransfer(keras.Model):
             output_shape = list(map(lambda x: int(x / 1.5), content_shape))
         else:
             output_shape = content_shape
-        # Max between min dimensions of content and style,
-        # i.e. content=(1920, 1080), style=(1280, 720) -> max(1080, 720) -> (1080, 1080)
-        # resize = (max(min(content_shape), min(style_shape)),)*2
         resize = (720, 720)
         content = self.preprocess_input(content, resize=resize)
         style = self.preprocess_input(style, resize=resize)
