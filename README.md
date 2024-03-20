@@ -7,7 +7,7 @@ AdaIN implementation on *Tensorflow / Keras*
 
 * [<b>InferenceTest.ipynb</b>](InferenceTest.ipynb) — testing a trained model(-s) with visualization of the results
 
-* [<b>TFLite.ipynb</b>]() — example of conversion and inference of a model in `.tflite` format for mobile devices
+* [<b>TFLite.ipynb</b>](TFLite.ipynb) — example of conversion and inference of a model in `.tflite` format for mobile devices
 
 ## Model
 Folder [<b>net</b>](net) contains 2 files:
