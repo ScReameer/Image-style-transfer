@@ -108,14 +108,37 @@ class StyleTransfer(keras.Model):
         reconstructed_image = self.decoder(t)
         return style_encoded, content_encoded, t, reconstructed_image
     # Inference
-    def predict(self, content:tf.Tensor, style:tf.Tensor, alpha=1, save_content_colors=False) -> tf.Tensor:
+    def predict(self, content:tf.Tensor, style:tf.Tensor, alpha=1, save_content_colors=False, resize_to='same') -> tf.Tensor:
+        
+        """Transfer style from style image to content image
+
+        Args:
+            content (tf.Tensor): sontent image, shape should be [B, H, W, C]
+            style (tf.Tensor): style image, shape should be [B, H, W, C]
+            alpha (int, optional): style 'weight' between 0 and 1. Defaults to 1.
+            save_content_colors (bool, optional): match style and content histograms before preprocessing. Defaults to False.
+            * resize_to (str, optional). Defaults to 'same': 
+                * `same` does preprocessing with minimal loss of information, but requires more computing resources. Recommended for use with GPU acceleration only. 
+                * tuple(N, N), where N - integer number. The dimension to which input images should be reduced if computing resources are insufficient.  
+                The lower the number, the faster the model works, but the less quality the results will be. It is recommended to use values between `(512, 512)` and `(720, 720)`
+
+        Returns:
+            tf.Tensor: stylized image
+        """
+        
         content_shape = content.shape[1:3]
         style_shape = style.shape[1:3]
+        # Downscale output for large images by 1.5 times
         if min(content_shape) > 1079:
             output_shape = list(map(lambda x: int(x / 1.5), content_shape))
         else:
             output_shape = content_shape
-        resize = (720, 720)
+        # 'same' only if there are enough computing resources or GPU acceleration is used
+        if resize_to == 'same':
+            resize = (max(min(content_shape), min(style_shape)),)*2
+        # If there are not enough resources, preferably no more than ~(720, 720)
+        elif isinstance(resize_to, tuple):
+            resize = resize_to
         content = self.preprocess_input(content, resize=resize)
         style = self.preprocess_input(style, resize=resize)
         if save_content_colors:

@@ -11,7 +11,11 @@ AdaIN implementation on *Tensorflow / Keras*
 
 ## Model
 Folder [<b>net</b>](net) contains 2 files:
-* `net_modules.py` — key layers (`keras.layers.Layer`) of the neural network: **Encoder**, **Decoder**, **ReflectionPadding2D**, **AdaIN**
+* `net_modules.py` — key layers (`keras.layers.Layer`) of the neural network: 
+    * **Encoder** — rebuilt first 4 blocks of pretrained *VGG-19* (`block1_conv1`, `block2_conv1`, `block3_conv1`, `block4_conv1`) with added `ReflectionPadding2D` before every `Conv2D`
+    * **Decoder** — mirrored encoder
+    * **ReflectionPadding2D** — reflection pad `(1, 1, 1, 1)`
+    * **AdaIN** — $\text{AdaIN}(x, y) = \sigma(y)\Big( \frac{x-\mu(x)}{\sigma(x)} \Big) + \mu(y)$
 
 * `style_autoencoder.py` — the model itself (`keras.Model`) with preprocessing and postprocessing of input and output data, respectively
 

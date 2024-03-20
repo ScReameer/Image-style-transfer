@@ -28,7 +28,8 @@ def get_prediction(model, content, style, alpha, save_content_colors):
     # Load images from bytes to tensors, add batch dimension
     content_img = tf.image.decode_image(content.getvalue(), channels=3)[tf.newaxis, ...]
     style_img = tf.image.decode_image(style.getvalue(), channels=3)[tf.newaxis, ...]
-    outputs = model.predict(content_img, style_img, alpha, save_content_colors)[0]
+    resize_scale = (720, 720)
+    outputs = model.predict(content_img, style_img, alpha, save_content_colors, resize_scale=resize_scale)[0]
     return outputs.numpy() / 255
 
 model = get_model()
