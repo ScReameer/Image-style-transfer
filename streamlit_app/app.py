@@ -37,10 +37,10 @@ content_upload_col, style_upload_col = st.columns(2, gap='large')
 allowed_types = ['png', 'jpg', 'jpeg']
 # Content upload button
 with content_upload_col:
-    content = st.file_uploader('**Изображение контента**', key='content_file', type=allowed_types)
+    content = st.file_uploader('**Content image**', key='content_file', type=allowed_types)
 # Style upload button
 with style_upload_col:
-    style = st.file_uploader('**Изображение стиля**', key='style_file', type=allowed_types)
+    style = st.file_uploader('**Style image**', key='style_file', type=allowed_types)
 # 'Weight' of style
 alpha = st.slider('Alpha', 0.0, 1.0, 1.0)
 # Match histogram from content to style before computing AdaIN
