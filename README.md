@@ -1,6 +1,8 @@
 # <center>Style transfer using Adaptive Instance Normalization
 AdaIN implementation on *Tensorflow / Keras*
 
+![](examples/adain.png)
+
 Dataset, used as **content** — `2015 Test images [81K/12GB]` from https://cocodataset.org/#download
 
 Dataset, used as **style** — `train.zip` from https://www.kaggle.com/c/painter-by-numbers/data
